@@ -286,9 +286,9 @@ note = "Stub, 4 calls."
 # ---------------------------------------------------------------- no system yet
 
 [function.GetVATSValue]
-status = "no-system"
+status = "open"
 system = "VATS"
-note = "Stub; 0 outside VATS [hypothesis]."
+note = "Answers for VATS mode, NVForever's own mark and fire (docs/design/vats-mode.md §12): the marked shot leaving now, 0 otherwise; query codes in the wiki's order [hypothesis]."
 
 [function.SetVatsTarget]
 status = "no-system"
@@ -301,9 +301,9 @@ system = "VATS"
 note = "Stub."
 
 [function.GetVATSMode]
-status = "no-system"
+status = "open"
 system = "VATS"
-note = "0 outside VATS matches [observed: probes]."
+note = "0 outside VATS matches [observed: probes]; VATS mode answers 1 while marking, 4 while firing [design] (docs/design/vats-mode.md §12)."
 
 [function.IsLimbGone]
 status = "no-system"

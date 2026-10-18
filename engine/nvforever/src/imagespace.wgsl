@@ -19,6 +19,8 @@ struct Grade {
     blur: f32,
     time: f32,
     sharp: f32,
+    // VATS mode: swipe edge, band, wash, grade (imagespace.rs).
+    vats: vec4<f32>,
 }
 
 @group(0) @binding(0) var screen: texture_2d<f32>;
@@ -30,6 +32,17 @@ struct Grade {
 // moderate and 5 strong].
 const RADIAL_REACH: f32 = 0.02;
 const RADIAL_TAPS: i32 = 12;
+
+// VATS mode's look (docs/design/vats-mode.md §5) [design, after the owner's Dead Eye
+// references]: luminance times this amber gives amber mid tones from mid grey; the creamy
+// wash; the band's width behind the edge (vats_mode::BAND_WIDTH) and the edge's softness,
+// as shares of the screen width; how much the corners darken.
+const VATS_AMBER: vec3<f32> = vec3<f32>(1.45, 0.92, 0.42);
+const VATS_WASH: vec3<f32> = vec3<f32>(1.0, 0.95, 0.78);
+const VATS_GRADE: f32 = 0.85;
+const VATS_BAND: f32 = 0.22;
+const VATS_SOFT: f32 = 0.02;
+const VATS_VIGNETTE: f32 = 0.35;
 
 fn to_srgb(c: vec3<f32>) -> vec3<f32> {
     return select(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3(0.0031308));
@@ -102,6 +115,19 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     c = c * grade.brightness;
     c = mix(vec3(grade.contrast_avg_lum), c, grade.contrast);
     c = clamp(c, vec3(0.0), vec3(1.0));
+    // VATS mode: the amber grade left of the swipe's edge, the band riding the edge, the
+    // wash over the whole screen.
+    let vats = grade.vats;
+    if vats.y > 0.0 || vats.z > 0.0 || vats.w > 0.0 {
+        let x = in.uv.x;
+        let behind = 1.0 - smoothstep(vats.x - VATS_SOFT, vats.x + VATS_SOFT, x);
+        let l = dot(c, vec3(0.2125, 0.7154, 0.0721));
+        let corner = 1.0 - VATS_VIGNETTE * smoothstep(0.4, 1.35, length((in.uv - vec2(0.5)) * 2.0));
+        let amber = clamp(vec3(l) * VATS_AMBER, vec3(0.0), vec3(1.0)) * corner;
+        c = mix(c, amber, clamp(vats.w * VATS_GRADE * behind, 0.0, 1.0));
+        let band = vats.y * smoothstep(vats.x - VATS_BAND, vats.x, x) * behind;
+        c = mix(c, VATS_WASH, clamp(band + vats.z, 0.0, 1.0));
+    }
     // The fade colour covers the graded picture [observed: the opening is white while a
     // modifier holds the brightness at zero, image-modifiers.md §5].
     c = mix(c, grade.fade.rgb, clamp(grade.fade.a, 0.0, 1.0));

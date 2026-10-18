@@ -843,6 +843,9 @@ pub struct Game<'a> {
     /// of the camera (`functions::senses`). Not part of the saved state: the engine
     /// measures again.
     pub senses: crate::functions::senses::Senses,
+    /// VATS mode's state and the marked shot leaving now, as the engine says
+    /// (`crate::vats`). Not part of the saved state: the mode is never saved.
+    pub vats: crate::vats::VatsState,
     /// The weather scripts forced or set, and the one the engine shows
     /// (`crate::weather`). Not part of the saved state yet.
     pub weather: crate::weather::WeatherState,
@@ -1105,6 +1108,7 @@ impl<'a> Game<'a> {
             terminals: Default::default(),
             locks: Default::default(),
             senses: Default::default(),
+            vats: Default::default(),
             weather: Default::default(),
             ui: Default::default(),
             console_requests: Vec::new(),

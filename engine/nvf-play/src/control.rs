@@ -20,8 +20,10 @@
 //!   the eye [hypothesis: the game's hold-POV camera; design: the owner's playtest list 5
 //!   item 23].
 //!   The mouse wheel zooms the third-person camera.
-//! - The game's other controls (Rest, VATS, the hotkeys, Ammo Swap, Quick Save, Quick
-//!   Load, Grab) are bound but not built: pressing one says so on screen.
+//! - VATS (V) is VATS mode's (`crate::vats_mode`, docs/design/vats-mode.md), which also
+//!   takes Use, Block and Activate while it is on.
+//! - The game's other controls (Rest, the hotkeys, Ammo Swap, Quick Save, Quick Load,
+//!   Grab) are bound but not built: pressing one says so on screen.
 //! - Scripts turn groups of controls off and on (`DisablePlayerControls`,
 //!   `EnablePlayerControls`): [`ControlLocks`], applied to every frame's requests by
 //!   [`enforce_locks`].
@@ -488,8 +490,7 @@ pub fn init_settings(mut commands: Commands, sim: Res<SimState>) {
 }
 
 /// The controls that are bound but not built yet.
-const NOT_BUILT: [Control; 11] = [
-    Control::Vats,
+const NOT_BUILT: [Control; 10] = [
     Control::Hotkey1,
     Control::Hotkey3,
     Control::Hotkey4,

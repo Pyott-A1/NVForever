@@ -193,7 +193,7 @@ pub(crate) fn add_temporary(g: &mut Game, actor: FormId, code: u16, d: f64) {
 }
 
 /// Take up to `amount` (0 or more) off an actor value's damage, as RestoreActorValue.
-pub(crate) fn restore(g: &mut Game, actor: FormId, code: u16, amount: f64) {
+pub fn restore(g: &mut Game, actor: FormId, code: u16, amount: f64) {
     let d = damage(g, actor, code) - amount.max(0.0);
     set_damage(g, actor, code, d);
 }

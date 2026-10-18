@@ -35,7 +35,7 @@ pub mod stubs;
 pub mod ui;
 
 pub use reputation::{crime_infamy, reputations_of, store as reputation_store, tiers as reputation_tiers};
-pub use actor::{actor_value, actor_value_capped, actor_value_parts, temporary as actor_value_temporary, add_damage as add_actor_value_damage, av_by_name, av_code, set_current as set_actor_value_current, weapon_anim_code, AV_NAMES};
+pub use actor::{actor_value, actor_value_capped, actor_value_parts, temporary as actor_value_temporary, add_damage as add_actor_value_damage, restore as restore_actor_value_damage, av_by_name, av_code, set_current as set_actor_value_current, weapon_anim_code, AV_NAMES};
 pub use actor::{faction_rank, faction_relation, factions_of, factions_relation};
 pub use misc::clock_now;
 pub use refs::{list_members, repair_list};
@@ -460,7 +460,7 @@ pub fn registry() -> &'static [(u16, &'static str, Kind)] {
         (0x1123, "PlayMagicShaderVisuals", Impl(misc::play_magic_shader_visuals)),
         (0x1129, "SetActorAlpha", Impl(misc::set_actor_alpha)),
         (0x10B2, "PlaySound3D", Impl(crate::sound::play_sound_3d)),
-        (0x1198, "GetVATSValue", Stub("combat (VATS)")),
+        (0x1198, "GetVATSValue", Impl(crate::vats::get_vats_value)),
         (0x105A, "SetAlert", Impl(crate::awareness::set_alert)),
         (0x1042, "GetShouldAttack", Impl(fighting::get_should_attack)),
         (0x1275, "IncrementScriptedChallenge", Impl(ui::increment_scripted_challenge)),
@@ -510,7 +510,7 @@ pub fn registry() -> &'static [(u16, &'static str, Kind)] {
         (0x124D, "DetonatePlacedExplosives", Impl(actor::detonate_placed_explosives)),
         (0x11EB, "SetVatsTarget", Stub("combat (VATS)")),
         (0x10EB, "GetVATSTargetHeight", Stub("combat (VATS)")),
-        (0x10E0, "GetVATSMode", Stub("combat (VATS)")),
+        (0x10E0, "GetVATSMode", Impl(crate::vats::get_vats_mode)),
         (0x102D, "GetDetected", Impl(crate::detection::get_detected)),
         (0x10B4, "GetDetectionLevel", Impl(crate::detection::get_detection_level)),
         (0x101B, "GetLineOfSight", Impl(senses::get_line_of_sight)),

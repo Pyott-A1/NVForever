@@ -328,7 +328,7 @@ fn activate(
     time: Option<Res<Time>>,
     clock: Option<Res<crate::pause::PlayClock>>,
     auto: Option<ResMut<AutoActivate>>,
-    (target, next): (Res<Target>, Option<ResMut<ActivateNext>>),
+    (target, next, vats): (Res<Target>, Option<ResMut<ActivateNext>>, Option<Res<crate::vats_mode::VatsMode>>),
     mut sim: ResMut<SimState>,
     play: Res<PlayWorld>,
     mut hud: ResMut<HudMessage>,
@@ -358,6 +358,10 @@ fn activate(
         _ => false,
     };
     if !input.just_pressed(crate::bindings::Control::Activate) && !fired && queued.is_none() {
+        return;
+    }
+    // VATS mode has Activate for itself (it fires the marks, docs/design/vats-mode.md §11.5).
+    if vats.is_some_and(|v| v.holds_input()) {
         return;
     }
     // Scripts turned the player's movement off: world objects cannot be activated

@@ -28,6 +28,7 @@ pub mod rng;
 pub mod shot;
 pub mod spread;
 pub mod tuning;
+pub mod vats;
 pub mod vec;
 
 pub use data::{CombatForms, ShotChain};

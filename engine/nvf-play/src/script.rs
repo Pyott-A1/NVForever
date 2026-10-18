@@ -1112,15 +1112,22 @@ fn take_pending_game(world: &mut bevy::prelude::World) {
 /// SetGlobalTimeMultiplier, "0.5 is slow mo"]. Sounds keep their speed and pitch
 /// [engineering choice: the shipped slow motion asks for that, QUST 0x00102037 stage 27].
 /// Pausing (loading screens, menus) is the clock's own state and is not touched. The
-/// engine's own slow motion ([`ClockScale`]) multiplies it.
-fn time_multiplier(script: Res<ScriptState>, scale: Option<Res<ClockScale>>, mut clock: ResMut<Time<Virtual>>, mut told: Local<Option<f32>>) {
+/// engine's own slow motion ([`ClockScale`]) multiplies it, and so does VATS mode's
+/// (`crate::vats_mode`, docs/design/vats-mode.md §4).
+fn time_multiplier(
+    script: Res<ScriptState>,
+    scale: Option<Res<ClockScale>>,
+    vats: Option<Res<crate::vats_mode::VatsMode>>,
+    mut clock: ResMut<Time<Virtual>>,
+    mut told: Local<Option<f32>>,
+) {
     let Some(rt) = script.rt.as_ref() else { return };
     let asked = rt.game.ui.time_multiplier.unwrap_or(1.0) as f32;
     let before = told.replace(asked).unwrap_or(1.0);
     if before != asked {
         info!("time multiplier: {before} -> {asked} (SetGlobalTimeMultiplier)");
     }
-    let want = asked * scale.map_or(1.0, |s| s.0.max(0.0));
+    let want = asked * scale.map_or(1.0, |s| s.0.max(0.0)) * vats.map_or(1.0, |v| v.time_scale());
     if (clock.relative_speed() - want).abs() > 1e-6 {
         clock.set_relative_speed(want);
     }

@@ -85,6 +85,12 @@ pub struct Rules {
     /// role, from its name; design: applied to every two-handed weapon, the owner's
     /// playtest list 5 item 61].
     pub move_2h_penalty: f32,
+    /// The attack AP cost of each kind of weapon without its own (`fActionPointsAttack…`;
+    /// VATS mode, docs/design/vats-mode.md §7.1).
+    pub ap_attack: crate::vats::ApAttack,
+    /// `fActionPointsRestoreRate`: spent AP comes back at this share of the maximum a
+    /// second [hypothesis, vats-mode.md §7.2].
+    pub ap_restore_rate: f32,
     /// Settings not found in the load order (their defaults were used).
     pub defaulted: Vec<&'static str>,
 }
@@ -147,6 +153,18 @@ const SETTINGS: &[(&str, f32)] = &[
     ("fDamagePowerAttackBackBonus", 2.0),
     ("fDamagePowerAttackSideBonus", 2.0),
     ("fMove2HBigPenalty", 0.1),
+    // VATS mode's AP (docs/design/vats-mode.md §7): no wiki defaults; FalloutNV.esm's
+    // values [observed].
+    ("fActionPointsAttackPistol", 20.0),
+    ("fActionPointsAttackRifle", 25.0),
+    ("fActionPointsAttackHandle", 20.0),
+    ("fActionPointsAttackLauncher", 40.0),
+    ("fActionPointsAttackOneHandMelee", 15.0),
+    ("fActionPointsAttackTwoHandMelee", 30.0),
+    ("fActionPointsAttackUnarmed", 22.0),
+    ("fActionPointsAttackGrenade", 35.0),
+    ("fActionPointsAttackMine", 10.0),
+    ("fActionPointsRestoreRate", 0.06),
 ];
 
 impl Rules {
@@ -225,6 +243,18 @@ impl Rules {
             power_attack_back: n(),
             power_attack_side: n(),
             move_2h_penalty: n(),
+            ap_attack: crate::vats::ApAttack {
+                pistol: n(),
+                rifle: n(),
+                handle: n(),
+                launcher: n(),
+                one_hand_melee: n(),
+                two_hand_melee: n(),
+                unarmed: n(),
+                grenade: n(),
+                mine: n(),
+            },
+            ap_restore_rate: n(),
             defaulted,
         }
     }

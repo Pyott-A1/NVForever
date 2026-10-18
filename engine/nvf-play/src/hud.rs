@@ -372,6 +372,7 @@ fn gather(
     mut script: Option<ResMut<ScriptState>>,
     mut sim: ResMut<SimState>,
     mut view: ResMut<HudView>,
+    vats: Option<Res<crate::vats_mode::VatsMode>>,
 ) {
     // [documented: GECK wiki DisablePlayerControls, the movement flag: "HUD is partially
     // disabled: Action Points, Health, Crosshair".]
@@ -401,8 +402,11 @@ fn gather(
             let ap = match fnv_game::functions::actor_value_parts(&mut rt.game, FormId::PLAYER_REF, ACTION_POINTS) {
                 Ok([base, modifier, damage]) => {
                     let whole = base + modifier + temporary(&rt.game, ACTION_POINTS);
+                    // VATS mode's marks hold their AP: the bar shows what is left after
+                    // them (docs/design/vats-mode.md §8) [design].
+                    let reserved = vats.as_ref().map_or(0.0, |v| v.reserved() as f64);
                     if whole > 0.0 {
-                        (whole - damage) / whole
+                        ((whole - damage - reserved) / whole).max(0.0)
                     } else {
                         1.0
                     }

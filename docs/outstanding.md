@@ -34,7 +34,7 @@ GetOwnerLastTarget (#403). About 50 functions are still stubs.
 | 12 | Placing at the crosshair | 5 | Cheap | PlaceAtReticle |
 | 13 | A leveled actor's level re-rolled | 4 | SetLevel sets the level but does not re-roll the NPC's inventory | SetLevel |
 | 14 | Cannibal and Mister Sandman | 3 | The perks' activate choices are not built | (perk entry points) |
-| 15 | VATS | 3 quests, 250 conditions | Not started | GetVATSValue and the other VATS functions |
+| 15 | VATS | 3 quests, 250 conditions | VATS mode built (vats-mode.md), awaiting the owner | GetVATSValue and GetVATSMode answer for VATS mode; GetVATSTargetHeight and SetVatsTarget stay stubs |
 | 16 | Miscellaneous stats, scale | 3 each | Counters other than ModPCMiscStat's; SetScale not read by the engine | GetPCMiscStat, SetScale |
 | 17 | Dismemberment, end videos, cell image space | 2 each | Not built | (dismemberment), PlayBink, SetCellImageSpace |
 | 18 | One quest each | 1 each | Screen splatter, AI package codes (Sandbox, Travel-at-goal), AutoDisplayObjectives, navmesh switches, SetPCCanUsePowerArmor, ExitGame | |
@@ -46,7 +46,7 @@ six functions still waiting for an in-game capture to settle their answers.
 
 From [status.md](status.md); the playthrough blockers above are not repeated.
 
-- **Gameplay**: VATS (not started); people's power attacks (creatures' are built); melee
+- **Gameplay**: VATS mode built for single-shot guns (bursts, melee and thrown weapons not yet); people's power attacks (creatures' are built); melee
   weapon use through UseWeapon; the companion wheel, aggressive/passive companions and
   companions sneaking with the player; perks that change skill points; slot machines; crafting's icon, effects line and making several at
   once; reputation disguises and resets.

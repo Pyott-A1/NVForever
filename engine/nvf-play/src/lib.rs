@@ -80,6 +80,7 @@ pub mod terminal;
 mod test_aid;
 pub mod sfx;
 pub mod ui_sounds;
+pub mod vats_mode;
 pub mod voice;
 pub mod wait;
 pub mod world_sounds;
@@ -287,7 +288,8 @@ impl Plugin for PlayPlugin {
             .add_plugins(cursor::CursorPlugin)
             .add_plugins(crafting::CraftingPlugin)
             .add_plugins(repair::RepairPlugin)
-            .add_plugins(container_anim::ContainerAnimPlugin);
+            .add_plugins(container_anim::ContainerAnimPlugin)
+            .add_plugins(vats_mode::VatsModePlugin);
         test_aid::setup(app);
         settings::setup(app);
     }

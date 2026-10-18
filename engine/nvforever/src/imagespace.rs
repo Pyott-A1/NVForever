@@ -14,6 +14,10 @@
 //! grade pass, graded with the modifiers' multiply/add on the grade, and last covered by
 //! the fade colour. The modifiers on the screen are the script runtime's
 //! (`fnv_game::Game::image_modifiers`) and those of `--imod`.
+//!
+//! VATS mode's look (docs/design/vats-mode.md §5, `nvf_play::vats_mode::VatsMode::look`)
+//! comes after the grade and before the fade colour: the amber grade left of the swipe's
+//! edge, the creamy band on the edge and the wash over the whole screen [design].
 
 use crate::sky::SkyState;
 use crate::world::WorldData;
@@ -61,6 +65,9 @@ pub struct ImageSpaceGrade {
     /// larger nearer) and does not take it into the blur of what is behind: 0 for none.
     /// The Pip-Boy keeps itself sharp over the blurred world so.
     pub sharp: f32,
+    /// VATS mode: the swipe's edge (a share of the screen width, graded to its left), the
+    /// band on the edge, the wash over the screen, the grade's strength (all 0: none).
+    pub vats: Vec4,
 }
 
 impl Default for ImageSpaceGrade {
@@ -77,6 +84,7 @@ impl Default for ImageSpaceGrade {
             blur: 0.0,
             time: 0.0,
             sharp: 0.0,
+            vats: Vec4::ZERO,
         }
     }
 }
@@ -212,7 +220,12 @@ fn update_grade(
     new_game: Option<Res<nvf_play::script::NewGame>>,
     wait: Option<Res<nvf_play::wait::WaitMenu>>,
     sleep: Option<Res<nvf_play::wait::SleepFade>>,
-    (pip, projections, death): (Option<Res<nvf_play::pipboy::PipBoy>>, Query<&Projection, With<nvf_play::PlayerCamera>>, Option<Res<crate::death_cam::DeathCam>>),
+    (pip, projections, death, vats): (
+        Option<Res<nvf_play::pipboy::PipBoy>>,
+        Query<&Projection, With<nvf_play::PlayerCamera>>,
+        Option<Res<crate::death_cam::DeathCam>>,
+        Option<Res<nvf_play::vats_mode::VatsMode>>,
+    ),
     mut mods: ResMut<ScreenModifiers>,
     mut grades: Query<&mut ImageSpaceGrade>,
 ) {
@@ -269,6 +282,7 @@ fn update_grade(
         blur: effect.blur_radius.max(if wait.is_some_and(|w| w.is_open()) { WAIT_MENU_BLUR } else { 0.0 }).max(pip_blur).max(death.map_or(0.0, |d| d.blur())),
         time: now,
         sharp,
+        vats: vats.map_or(Vec4::ZERO, |v| Vec4::from_array(v.look())),
     };
     for mut grade in &mut grades {
         *grade = g;

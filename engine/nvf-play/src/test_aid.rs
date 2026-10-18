@@ -45,6 +45,8 @@
 //!   presses put the point under the crosshair: in third person the view turns so the
 //!   over-the-shoulder camera's line passes through it (`control::Crosshair::aim_at`).
 //!   `flashlight` switches the flashlight as a hold of Menu Mode does (`crate::flashlight`).
+//!   `aimvats` aims at the nearest living actor that has no VATS mode mark yet, as
+//!   `aimactor` does, so a click marks it (`crate::vats_mode`, docs/design/vats-mode.md §13).
 //! - `NVF_PLAY_TEST_KEYS=<seconds>:<key>[:<hold seconds>][,...]` presses a real key or
 //!   mouse button at each time and lets it go after the hold (default: the next frame),
 //!   through Bevy's input state, so the game's bindings (`crate::bindings`) are what
@@ -169,6 +171,8 @@ enum Press {
     Equip(FormId),
     Condition(f32),
     Flashlight,
+    /// The nearest living actor with no VATS mode mark yet (`crate::vats_mode`).
+    AimVats,
 }
 
 fn press(rest: &str) -> Result<Press, String> {
@@ -187,6 +191,7 @@ fn press(rest: &str) -> Result<Press, String> {
         "aimflat" => Press::AimFlat,
         "aimcorpse" => Press::AimCorpse,
         "aimnpc" => Press::AimNpc,
+        "aimvats" => Press::AimVats,
         _ => {
             if let Some(Ok(id)) = rest.strip_prefix("equip=").map(|h| u32::from_str_radix(h.trim().trim_start_matches("0x"), 16)) {
                 Press::Equip(FormId(id))
@@ -451,6 +456,7 @@ fn keys_and_controls(
     play: Res<crate::PlayWorld>,
     mut sim: ResMut<SimState>,
     mut flashlight: ResMut<crate::flashlight::Flashlight>,
+    (vats, script): (Res<crate::vats_mode::VatsMode>, Option<Res<crate::script::ScriptState>>),
 ) {
     let now = time.elapsed_secs();
     for m in take_due(&mut aids.moves, now) {
@@ -490,6 +496,11 @@ fn keys_and_controls(
             Press::AimNpcAt(h) => aim_at_nearest_actor(&phys, &mut player, cross.as_ref(), |id| play.index.refs.get(&id).is_some_and(|e| &e.sig == b"ACHR"), Some(Aim::Share(h))),
             Press::AimPart(n) => aim_at_nearest_actor(&phys, &mut player, cross.as_ref(), |id| play.index.refs.get(&id).is_some_and(|e| &e.sig == b"ACHR"), Some(Aim::Part(n))),
             Press::AimRef(id) => aim_at_ref(&phys, &mut player, cross.as_ref(), id),
+            Press::AimVats => {
+                let marked = vats.marked();
+                let alive = |id: u32| !crate::combat::is_dead(script.as_deref(), id) && !marked.contains(&id);
+                aim_at_nearest_actor(&phys, &mut player, cross.as_ref(), alive, None)
+            }
             Press::Condition(percent) => {
                 let c = (percent / 100.0).clamp(0.0, 1.0);
                 if let Ok(inv) = sim.world.inventory_mut(FormId::PLAYER_REF) {

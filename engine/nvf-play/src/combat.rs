@@ -245,6 +245,9 @@ pub struct By {
     pub ammo: Option<FormId>,
     /// It does no damage ([`ActorFire::harmless`]).
     pub harmless: bool,
+    /// A marked shot of VATS mode (`crate::vats_mode`): its hit counts as a VATS attack
+    /// (the critical chance bonus, docs/design/vats-mode.md §9.2).
+    pub vats: bool,
 }
 
 /// One projectile to draw this frame.
@@ -729,6 +732,63 @@ impl Combat {
     pub fn projectile(&self) -> Option<FormId> {
         self.forms.chain(self.weapon?, self.ammo)?.projectile
     }
+
+    /// The weapon in hand as VATS mode needs it (docs/design/vats-mode.md §3, §7), or why
+    /// it cannot enter: a gun with a firing cycle that fires a projectile, not reloading or
+    /// jammed, a round loaded.
+    pub fn vats_weapon(&self) -> Result<VatsWeapon, &'static str> {
+        const NO_GUN: &str = "VATS mode needs a gun.";
+        let id = self.equipped.flatten().ok_or(NO_GUN)?;
+        let w = self.forms.weapons.get(&id).ok_or(NO_GUN)?;
+        if self.melee || self.self_ammo || AttackKind::of(w) != AttackKind::Gun {
+            return Err(NO_GUN);
+        }
+        let proj = self.forms.chain(id, self.ammo).and_then(|ch| ch.projectile).ok_or(NO_GUN)?;
+        let cy = self.cycle.as_ref().ok_or(NO_GUN)?;
+        if cy.reloading() || cy.jammed() {
+            return Err("Not while reloading.");
+        }
+        // God mode keeps the magazine full (the shots take nothing).
+        let rounds = if cy.no_ammo {
+            u32::MAX / 2
+        } else if god_mode() && cy.regen.is_none() {
+            cy.clip_size
+        } else {
+            cy.magazine
+        };
+        if !cy.no_ammo && rounds < cy.ammo_use {
+            return Err("Out of ammo.");
+        }
+        let range = self.forms.projectiles.get(&proj).map_or(0.0, |p| p.range);
+        Ok(VatsWeapon {
+            id,
+            edid: w.edid.clone().unwrap_or_else(|| id.to_string()),
+            cost: fnv_combat::vats::shot_ap_cost(w, &self.rules.ap_attack),
+            rounds_per_shot: if cy.no_ammo { 1 } else { cy.ammo_use },
+            rounds,
+            reach: if range > 0.0 { range } else { crate::vats_mode::REACH },
+        })
+    }
+
+    /// The BPTD part an actor's hit volume part is (VATS mode's marks).
+    pub fn vats_part(&self, parts: &ActorParts, actor: u32, part: Option<u8>) -> Option<BodyPart> {
+        body_part(self, parts, actor as ActorId, part)
+    }
+}
+
+/// The weapon in hand for VATS mode ([`Combat::vats_weapon`]).
+#[derive(Debug, Clone)]
+pub struct VatsWeapon {
+    pub id: FormId,
+    pub edid: String,
+    /// AP a shot (`fnv_combat::vats::shot_ap_cost`).
+    pub cost: f32,
+    pub rounds_per_shot: u32,
+    /// Rounds in the magazine now (the marks' limit).
+    pub rounds: u32,
+    /// How far the crosshair's ray looks for a target: the projectile's range, else
+    /// `vats_mode::REACH`.
+    pub reach: f32,
 }
 
 pub struct CombatPlugin;
@@ -1081,7 +1141,7 @@ fn weapon_sounds(c: Res<Combat>, control: Res<PlayerControl>, sfx: Option<Res<Sf
 }
 
 #[allow(clippy::too_many_arguments)]
-fn fire(
+pub(crate) fn fire(
     time: Res<Time>,
     mut c: ResMut<Combat>,
     mut sim: ResMut<SimState>,
@@ -1097,11 +1157,13 @@ fn fire(
     mut sounds: MessageWriter<PlaySound>,
     mut casings: MessageWriter<CasingFx>,
     mut loops: MessageWriter<LoopSound>,
-    mut hud: Option<ResMut<HudMessage>>,
+    (mut hud, mut vats): (Option<ResMut<HudMessage>>, Option<ResMut<crate::vats_mode::VatsMode>>),
 ) {
     let dt = time.delta_secs();
     let c = &mut *c;
     c.time += dt;
+    // VATS mode's marked shot due now: the point it goes straight at (vats-mode.md §9.1).
+    let vats_shot = vats.as_deref_mut().and_then(|v| v.take_shot());
     // The looping shoot sound stops a moment after the last shot.
     if let Some((sound, left)) = c.looping.as_mut() {
         *left -= dt;
@@ -1121,10 +1183,22 @@ fn fire(
     }
     let (Some(id), Some(cycle)) = (c.weapon, c.cycle.as_mut()) else { return };
     if !anim.ready {
+        if vats_shot.is_some() {
+            info!("combat: the VATS mode shot could not leave (the weapon is not out)");
+        }
         return;
     }
     let w = c.forms.weapons[&id].clone();
     cycle.timing = Timing::of(&w, &anim.timing, &c.tuning);
+    // A VATS mode shot leaves now, whatever the weapon's cooldown or wind-up (the owner's
+    // "faster than the weapon's normal rate"), unless it is reloading, jammed or empty.
+    if vats_shot.is_some() {
+        if cycle.reloading() || cycle.jammed() || (!cycle.no_ammo && cycle.magazine < cycle.ammo_use) {
+            info!("combat: the VATS mode shot could not leave (reloading, jammed or empty)");
+        } else {
+            cycle.phase = fnv_combat::attack::Phase::WindUp { left: 0.0 };
+        }
+    }
     // Ammo Swap: the next carried type down the list, then a reload [design].
     let mut reload = reload;
     if swap {
@@ -1213,7 +1287,7 @@ fn fire(
                 let shooter = attacker(script.as_deref_mut(), &mut sim, &c.rules, FormId::PLAYER_REF, w.skill.as_deref(), false);
                 let stance = player_stance(&control, &phys, &limbs, shooter.skill, shooter.strength);
                 let actor_spread = spread::actor_spread(&c.rules, &c.tuning, &w, &stance);
-                let cone = if c.no_spread { 0.0 } else { spread::cone_deg(actor_spread, c.kick.bloom, &w, &effects) };
+                let cone = if c.no_spread || vats_shot.is_some() { 0.0 } else { spread::cone_deg(actor_spread, c.kick.bloom, &w, &effects) };
                 let eye = player.eye();
                 let gravity = phys.world.params.gravity;
                 let (tracer_chance, force, range) =
@@ -1228,6 +1302,15 @@ fn fire(
                 let leaving = {
                     let world = view(&mut phys);
                     let aim = match control.crosshair.as_ref() {
+                        // VATS mode: from the eye straight at the mark (100 % accuracy).
+                        _ if vats_shot.is_some() => {
+                            let d = vec::sub(vats_shot.unwrap_or(eye), eye);
+                            if vec::len(d) > 1e-3 {
+                                vec::normalize(d)
+                            } else {
+                                player.look_dir()
+                            }
+                        }
                         Some(cross) => {
                             let (start, dir) = crate::control::Crosshair::ray(Some(cross), eye, player.look_dir());
                             let end = vec::add(start, vec::scale(dir, reach));
@@ -1251,7 +1334,7 @@ fn fire(
                     let dir = vec::normalize(p.vel);
                     c.next_visual += 1;
                     let from_muzzle = anim.muzzle.is_some() && leaving.seen.at(leaving.origin, 0.0) != eye;
-                    let by = By { actor: FormId::PLAYER_REF, weapon: id, ammo: c.ammo, harmless: false };
+                    let by = By { actor: FormId::PLAYER_REF, weapon: id, ammo: c.ammo, harmless: false, vats: vats_shot.is_some() };
                     c.flying.push(Flying { p, id: c.next_visual, proj, shown, dir, from_muzzle, origin: leaving.origin, seen: leaving.seen, tracer, projectiles_per_shot: chain.projectiles_per_shot, force, by });
                 }
                 let seen_from = leaving.seen.at(leaving.origin, 0.0);
@@ -1272,15 +1355,18 @@ fn fire(
                     p3(seen_from),
                     if leaving.covered { "; cover in front of the barrel: it leaves the muzzle" } else { "" }
                 );
-                let kick = c.kick.shot(&c.tuning, w.min_spread, w.base_damage as f32);
-                player.pitch = (player.pitch + kick.to_radians()).clamp(-MAX_PITCH, MAX_PITCH);
+                // VATS mode's shots kick nothing and grow no bloom [design, vats-mode.md §11.1].
+                if vats_shot.is_none() {
+                    let kick = c.kick.shot(&c.tuning, w.min_spread, w.base_damage as f32);
+                    player.pitch = (player.pitch + kick.to_radians()).clamp(-MAX_PITCH, MAX_PITCH);
+                }
                 debug!("combat: shot, cone {cone:.2}°, magazine {}", cycle.magazine);
                 // The shot wears the weapon (§17); a thrown weapon is spent instead.
                 if !c.self_ammo {
                     // Worn below the jamming mark, the shot may jam it (item 9): the jam
                     // clip plays and nothing fires until it ends. Weapons that use ammo
                     // only; a thrown one spends itself [design].
-                    let jams = c.ammo.is_some() && c.rng.next_f32() < condition::jam_chance(&c.tuning, item_condition(&sim, FormId::PLAYER_REF, id));
+                    let jams = vats_shot.is_none() && c.ammo.is_some() && c.rng.next_f32() < condition::jam_chance(&c.tuning, item_condition(&sim, FormId::PLAYER_REF, id));
                     let points = condition::weapon_wear(&c.rules, &w, &effects);
                     if wear_weapon(&c.forms, &mut sim, &mut stats, hud.as_deref_mut(), None, script.as_deref_mut(), FormId::PLAYER_REF, id, points, None).is_some_and(|w| w.broke) {
                         break;
@@ -1883,7 +1969,7 @@ fn actor_attacks(
             sounds.write(PlaySound { sound, at: Some(seen_from) });
         }
         let (tracer_chance, force) = c.forms.projectiles.get(&proj).map_or((0.0, 0.0), |p| (p.tracer_chance, p.impact_force));
-        let by = By { actor: s.shooter, weapon: s.weapon, ammo, harmless: s.harmless };
+        let by = By { actor: s.shooter, weapon: s.weapon, ammo, harmless: s.harmless, vats: false };
         let rng = &mut c.rng;
         let mut rand = || rng.next_f32();
         let ps = shot::fire(&c.forms, &chain, leaving.origin, leaving.aim, s.cone, Some(s.shooter.0 as ActorId), gravity, &c.tuning, &mut rand);
@@ -2239,7 +2325,7 @@ fn fly(
             continue;
         }
         let ammo_effects: Vec<&AmmoEffect> = effect_ids.iter().filter_map(|e| c.forms.ammo_effects.get(e)).collect();
-        let a = attacker(script.as_deref_mut(), &mut sim, &c.rules, shooter, w.skill.as_deref(), false);
+        let a = attacker(script.as_deref_mut(), &mut sim, &c.rules, shooter, w.skill.as_deref(), p.by.vats);
         let bp = p.actor.and_then(|a| body_part(c, &parts, a, p.part));
         let part = bp.as_ref().map_or_else(HitPart::default, BodyPart::hit_part);
         let h = HitInput { weapon: &w, projectiles: p.projectiles, condition: item_condition(&sim, shooter, id), ammo_effects: &ammo_effects, part, power: 1.0 };
